@@ -18,7 +18,12 @@ public class Client {
 	
 	public void run(SocketChannel sc, String clientID) {
 		while (!Thread.interrupted()) {
-			ServerTaskOrder sto = getTaskFromServer();
+			ServerTaskOrder sto = null;
+			try {
+				sto = getTaskFromServer();
+			} catch (IOException e) {
+				System.err.println("Got error from server : " + e);
+			}
 			
 			
 			
