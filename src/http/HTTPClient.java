@@ -13,9 +13,9 @@ import http.HTTPHeader;
 public class HTTPClient {
 	private final Charset ASCII_CHARSET = Charset.forName("ASCII");
 
-	private final int BUFFER_SIZE = 4096;
+	private static final int BUFFER_SIZE = 4096;
 	private SocketChannel sc;
-	private final ByteBuffer buff;
+	private ByteBuffer buff;
 	private final byte CR = 13;
 	private final byte LF = 10;
 
@@ -28,8 +28,9 @@ public class HTTPClient {
 		this.sc = SocketChannel.open();
 		sc.connect(address);
 		sc.write(ASCII_CHARSET.encode(query));
-
+		
 		HTTPHeader header = readHeader();
+		
 		String body = null;
 
 		if (header.getContentLength() > 0) {
@@ -44,7 +45,7 @@ public class HTTPClient {
 			Charset bodyCharset = header.getCharset();
 			body = bodyCharset.decode(content).toString();
 		}
-		
+		System.out.println(body);
 		return new HTTPResponse(header, body);
 	}
 
@@ -66,7 +67,9 @@ public class HTTPClient {
 		while (true) {
 			if (!buff.hasRemaining()) {
 				buff.compact(); // écriture
+				System.out.println("toto");
 				int conn = sc.read(buff);
+				System.out.println("connexion value " + conn);
 				if (conn == -1) {
 					throw new HTTPException("Connection was closed while reading");
 				}
@@ -139,10 +142,12 @@ public class HTTPClient {
 			buff.limit(oldLimit);
 			buff.compact();
 		}
+		System.out.println("toto1");
+		System.out.println(content);
 		if (!readFully(content, sc)) {
 			throw new HTTPException("Connection closed while reading");
 		}
-
+		System.out.println("toto2");
 		return content;
 	}
 
@@ -178,9 +183,11 @@ public class HTTPClient {
 
 	public static boolean readFully(ByteBuffer bb, SocketChannel sc) throws IOException {
 		while (bb.hasRemaining()) {
+			System.out.println("before read bytes");
 			if (sc.read(bb) == -1) {
 				return false;
 			}
+			System.out.println("read bytes");
 		}
 		return true;
 	}

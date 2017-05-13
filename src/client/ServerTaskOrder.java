@@ -17,6 +17,9 @@ public class ServerTaskOrder {
 	
 	@JsonView()
 	private String task;
+	
+	@JsonView()
+	private long comeBackInSeconds;
 
 	public String getJobID() {
 		return jobID;
@@ -36,5 +39,9 @@ public class ServerTaskOrder {
 
 	public String getTask() {
 		return task;
+	}
+	
+	public long getComeBackInSeconds() {
+		return comeBackInSeconds;
 	}
 }
