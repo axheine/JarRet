@@ -1,6 +1,7 @@
 package client;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.util.Objects;
@@ -44,14 +45,18 @@ public class Client {
 				continue;
 			}
 			
+			System.out.println("Get some Work at " + sto.getWorkerURL() +"/"+ sto.getWorkerClassName());
+			
 			try {
 				worker = WorkerFactory.getWorker(sto.getWorkerURL(), sto.getWorkerClassName());
+				System.out.println("Found some work!");
 			} catch (MalformedURLException | ClassNotFoundException | IllegalAccessException
-					| InstantiationException e) {
+					| InstantiationException | IllegalArgumentException | SecurityException e) {
 				System.err.println("Something went wrong while getting worker " + e);
 			}
 			
-			worker.compute(1);
+			worker.compute(sto.getTask());
+			System.out.println("Computation Done.");
 		}
 	}
 

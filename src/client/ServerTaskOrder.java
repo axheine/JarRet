@@ -4,44 +4,44 @@ import com.fasterxml.jackson.annotation.JsonView;
 
 public class ServerTaskOrder {
 	@JsonView()
-	private String jobID;
+	private long JobId;
 	
 	@JsonView()
-	private String workerVersion;
+	private String WorkerVersion;
 	
 	@JsonView()
-	private String workerURL;
+	private String WorkerURL;
 	
 	@JsonView()
-	private String workerClassName;
+	private String WorkerClassName;
 	
 	@JsonView()
-	private String task;
+	private int Task;
 	
 	@JsonView()
-	private long comeBackInSeconds;
+	private long ComeBackInSeconds;
 
-	public String getJobID() {
-		return jobID;
+	public long getJobID() {
+		return JobId;
 	}
 
 	public String getWorkerVersion() {
-		return workerVersion;
+		return WorkerVersion;
 	}
 
 	public String getWorkerURL() {
-		return workerURL;
+		return WorkerURL;
 	}
 
 	public String getWorkerClassName() {
-		return workerClassName;
+		return WorkerClassName;
 	}
 
-	public String getTask() {
-		return task;
+	public int getTask() {
+		return Task;
 	}
 	
 	public long getComeBackInSeconds() {
-		return comeBackInSeconds;
+		return ComeBackInSeconds;
 	}
 }

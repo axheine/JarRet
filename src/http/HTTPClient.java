@@ -176,8 +176,9 @@ public class HTTPClient {
 	}
 
 	public static boolean readFully(ByteBuffer bb, SocketChannel sc) throws IOException {
+		System.out.println(bb.remaining());
 		while (bb.hasRemaining()) {
-			System.out.println("before read bytes");
+			System.out.println("before read bytes" + bb);
 			if (sc.read(bb) == -1) {
 				return false;
 			}
