@@ -166,7 +166,7 @@ public class HTTPClient {
 			bb.flip();
 			chunks.add(bb);
 
-			String line = readLineCRLF();
+			readLineCRLF();
 		}
 
 		int totalSize = chunks.stream().mapToInt((bb) -> bb.remaining()).sum();
