@@ -8,16 +8,12 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.LinkedList;
 
-import http.HTTPHeader;
-
 public class HTTPClient {
 	private final Charset ASCII_CHARSET = Charset.forName("ASCII");
 
 	private static final int BUFFER_SIZE = 4096;
 	private SocketChannel sc;
 	private ByteBuffer buff;
-	private final byte CR = 13;
-	private final byte LF = 10;
 
 	public HTTPClient() {
 		this.buff = ByteBuffer.allocate(BUFFER_SIZE);
@@ -28,12 +24,13 @@ public class HTTPClient {
 		this.sc = SocketChannel.open();
 		sc.connect(address);
 		sc.write(ASCII_CHARSET.encode(query));
-		
+
 		HTTPHeader header = readHeader();
-		
+
 		String body = null;
 
 		if (header.getContentLength() > 0) {
+			System.out.println("Body length: " + header.getContentLength());
 			ByteBuffer content;
 
 			if (!header.isChunkedTransfer())
@@ -43,9 +40,11 @@ public class HTTPClient {
 			content.flip();
 
 			Charset bodyCharset = header.getCharset();
+			System.out.println("Charset: "+bodyCharset);
 			body = bodyCharset.decode(content).toString();
 		}
-		System.out.println(body);
+		
+		System.out.println("Body: \n"+body);
 		return new HTTPResponse(header, body);
 	}
 
@@ -60,38 +59,29 @@ public class HTTPClient {
 	 *             be read
 	 */
 	public String readLineCRLF() throws IOException {
-		boolean foundCR = false;
 		StringBuilder sb = new StringBuilder();
+		boolean lastCR = false;
 
-		buff.flip(); // on passe en lecture
 		while (true) {
-			if (!buff.hasRemaining()) {
-				buff.compact(); // écriture
-				System.out.println("toto");
-				int conn = sc.read(buff);
-				System.out.println("connexion value " + conn);
-				if (conn == -1) {
-					throw new HTTPException("Connection was closed while reading");
+			System.out.println("Beginning of CRLF: "+buff);
+			buff.flip(); // read mode
+			
+			while (buff.hasRemaining()) {
+				char o = (char) buff.get();
+				sb.append(o);
+				if (o == '\n' && lastCR) {
+					buff.compact();
+					sb.setLength(sb.length() - 2);
+					System.out.println("End of CRLF: "+buff);
+					return sb.toString();
 				}
-				buff.flip(); // lecture
+				lastCR = (o == '\r');
 			}
-
-			byte c = buff.get();
-
-			if (c == CR)
-				foundCR = true;
-			else if (c == LF && foundCR)
-				break;
-			else
-				foundCR = false;
-
-			// System.out.println("Char "+((char) c));
-			sb.append((char) c);
+			buff.clear();
+			if (sc.read(buff) == -1) {
+				throw new HTTPException("Wrong Protocol");
+			}
 		}
-
-		buff.compact(); // on le repasse en écriture à la fin
-		sb.setLength(sb.length() - 1);
-		return sb.toString();
 	}
 
 	/**
@@ -104,19 +94,24 @@ public class HTTPClient {
 		HashMap<String, String> properties = new HashMap<>();
 		String line = "";
 		String status = "";
+		System.out.println("Buffer: "+buff);
 		while ((line = readLineCRLF()).length() != 0) {
+			System.out.println("Buffer: "+buff);
+			
 			int splitterIndex = line.indexOf(':');
 			if (splitterIndex == -1) {
 				String[] tokens = line.split(" ");
 				status = tokens[0] + " " + tokens[1];
 			} else {
+				System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
 				properties.put(line.substring(0, splitterIndex), line.substring(splitterIndex + 2));
 			}
 		}
 
 		if (status.equals(""))
 			throw new HTTPException("Malformed answer header (couldn't read answer status)");
-
+		
+		
 		return HTTPHeader.create(status, properties);
 	}
 
@@ -131,23 +126,22 @@ public class HTTPClient {
 	public ByteBuffer readBytes(int size) throws IOException {
 		ByteBuffer content = ByteBuffer.allocate(size);
 
-		buff.compact();
+		buff.flip(); // lecture
 		if (buff.remaining() < size) {
+			System.out.println("There's a little to get from buff buffer first.");
 			content.put(buff);
-			buff.clear();
+			if (!readFully(content, sc)) {
+				throw new HTTPException("Connection closed while reading");
+			}
 		} else {
+			System.out.println("All can be read from buff buffer.");
 			int oldLimit = buff.limit();
 			buff.limit(size);
 			content.put(buff);
 			buff.limit(oldLimit);
-			buff.compact();
 		}
-		System.out.println("toto1");
-		System.out.println(content);
-		if (!readFully(content, sc)) {
-			throw new HTTPException("Connection closed while reading");
-		}
-		System.out.println("toto2");
+		buff.compact();
+		System.out.println("Content: " + content);
 		return content;
 	}
 

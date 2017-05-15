@@ -64,8 +64,6 @@ public class Client {
 		
 		HTTPResponse serverAnswer = httpclient.sendGetQuery(serverAddress, query);
 		
-		System.out.println(serverAnswer);
-		
 		ServerTaskOrder sto = mapper.readValue(serverAnswer.body, ServerTaskOrder.class);
 		//System.out.println(sto);
 		return sto;
