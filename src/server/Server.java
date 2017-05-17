@@ -3,7 +3,6 @@ package server;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -15,95 +14,16 @@ import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 
-public class ServerSumNew {
+public class Server {
 
-	private static class Context {
-		private boolean inputClosed = false;
-		private final ByteBuffer in = ByteBuffer.allocate(BUF_SIZE);
-		private final ByteBuffer out = ByteBuffer.allocate(BUF_SIZE);
-		private final SelectionKey key;
-		private final SocketChannel sc;
-		private long inactiveTime;
-
-		public Context(SelectionKey key) {
-			this.key = key;
-			this.sc = (SocketChannel) key.channel();
-			this.inactiveTime = 0;
-		}
-
-		public void doRead() throws IOException {
-			if (sc.read(in) == -1) {
-				inputClosed = true;
-			}
-			process();
-			updateInterestOps();
-		}
-
-		public void doWrite() throws IOException {
-			out.flip();
-			sc.write(out);
-			out.compact();
-			process();
-			updateInterestOps();
-		}
-
-		private void process() {
-			in.flip();
-			while (in.remaining() >= 2 * Integer.BYTES && out.remaining() >= Integer.BYTES) {
-				int result = in.getInt() + in.getInt();
-				out.putInt(result);
-			}
-			in.compact();
-		}
-		
-		public void resetInactiveTime() {
-			this.inactiveTime = 0;
-		}
-		
-		public void addInactiveTime(long time,long timeout) {
-			this.inactiveTime += time;
-			if(inactiveTime > timeout) {
-				silentlyClose(sc);
-			}
-		}
-		
-		private void updateInterestOps() {
-	    	int ops = 0;
-		    if(out.position() != 0) {
-		    	ops = ops | SelectionKey.OP_WRITE;
-		    }
-	    	if(in.hasRemaining() && !inputClosed) {
-	    		ops = ops | SelectionKey.OP_READ;
-	    	}
-	    	if(ops == 0) {
-	    		silentlyClose(sc);
-	    	}
-	    	
-	    	key.interestOps(ops);
-		}
-
-		public String getClientAdress() {
-			String cl = "";
-			try {
-				cl = sc.getRemoteAddress().toString();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			return cl;
-		}
-	}
-
-	private static final int BUF_SIZE = 512;
+	static final int BUFF_SIZE = 512;
 	private final ServerSocketChannel serverSocketChannel;
 	private final Selector selector;
 	private final Set<SelectionKey> selectedKeys;
 	private static final long TIMEOUT = 2000;
 	private Queue<String> queue;
-	
-	
 
-	public ServerSumNew(int port) throws IOException {
+	public Server(int port) throws IOException {
 		serverSocketChannel = ServerSocketChannel.open();
 		serverSocketChannel.bind(new InetSocketAddress(port));
 		selector = Selector.open();
@@ -118,36 +38,22 @@ public class ServerSumNew {
 		while (!Thread.interrupted()) {
 			printKeys();
 			System.out.println("Starting select");
-		
-			long startLoop = System.currentTimeMillis();
-			selector.select(TIMEOUT/10);
-			if(processCommand()) {
+
+			selector.select(TIMEOUT / 10);
+			if (processCommand()) {
 				return;
 			}
 			System.out.println("Select finished");
 			printSelectedKey();
 			processSelectedKeys();
-			long endLoop = System.currentTimeMillis();
-			long timeSpent = endLoop-startLoop;
-			updateInactivityKeys(timeSpent);
 
 			selectedKeys.clear();
 		}
 	}
 
-	private void updateInactivityKeys(long timeSpent) {
-		for(SelectionKey key: selector.keys()) {
-			Object o = key.attachment();
-			if(o != null) {
-				((Context)o).addInactiveTime(timeSpent, TIMEOUT);
-			}
-			
-		}
-	}
-
 	private void processSelectedKeys() throws IOException {
 		for (SelectionKey key : selectedKeys) {
-			
+
 			if (key.isValid() && key.isAcceptable()) {
 				doAccept(key);
 			}
@@ -155,13 +61,11 @@ public class ServerSumNew {
 				Context cntxt = (Context) key.attachment();
 				if (key.isValid() && key.isWritable()) {
 					cntxt.doWrite();
-					cntxt.resetInactiveTime();
 				}
 				if (key.isValid() && key.isReadable()) {
 					cntxt.doRead();
-					cntxt.resetInactiveTime();
 				}
-				
+
 			} catch (IOException e) {
 				silentlyClose(key.channel());
 			}
@@ -172,10 +76,10 @@ public class ServerSumNew {
 		SocketChannel sc = serverSocketChannel.accept();
 		sc.configureBlocking(false);
 		SelectionKey clientKey = sc.register(selector, SelectionKey.OP_READ);
-		clientKey.attach(new Context(clientKey));
+		clientKey.attach(new TaskContext(clientKey, BUFF_SIZE));
 	}
 
-	private static void silentlyClose(SelectableChannel sc) {
+	static void silentlyClose(SelectableChannel sc) {
 		if (sc == null)
 			return;
 		try {
@@ -194,11 +98,11 @@ public class ServerSumNew {
 			usage();
 			return;
 		}
-		ServerSumNew server = new ServerSumNew(Integer.parseInt(args[0]));
+		Server server = new Server(Integer.parseInt(args[0]));
 		server.startCommandListener(System.in);
 		server.launch();
 	}
-	
+
 	private void shutdown() {
 		try {
 			serverSocketChannel.close();
@@ -206,25 +110,25 @@ public class ServerSumNew {
 			// DO NOTHING
 		}
 	}
-	
+
 	private boolean processCommand() {
-		while(!queue.isEmpty()) {
+		while (!queue.isEmpty()) {
 			String command = queue.poll();
 			switch (command) {
-				case "HALT":
-					shutdownNow();
-					return true;
-				case "STOP":
-					shutdown();
-					return true;
-				case "FLUSH":
-					flush();
-					break;
-				case "SHOW":
-					show();
-					break;
-				default:
-					System.err.println("Bad request");
+			case "HALT":
+				shutdownNow();
+				return true;
+			case "STOP":
+				shutdown();
+				return true;
+			case "FLUSH":
+				flush();
+				break;
+			case "SHOW":
+				show();
+				break;
+			default:
+				System.err.println("Bad request");
 			}
 		}
 		return false;
@@ -232,27 +136,27 @@ public class ServerSumNew {
 
 	private void startCommandListener(InputStream in) {
 		Thread t = new Thread(() -> {
-			Scanner sc = new Scanner(in);
-			while (sc.hasNextLine()) {
-				String line = sc.nextLine();
-				switch (line) {
+			try (Scanner sc = new Scanner(in)) {
+				while (sc.hasNextLine()) {
+					String line = sc.nextLine();
+					switch (line) {
 					case "HALT":
-						
+
 					case "STOP":
 						queue.add(line);
 						selector.wakeup();
 						return;
 					case "FLUSH":
-						
+
 					case "SHOW":
 						queue.add(line);
 						selector.wakeup();
 						break;
 					default:
 						System.err.println("Bad request");
+					}
 				}
 			}
-			sc.close();
 		});
 		t.start();
 	}
@@ -263,14 +167,15 @@ public class ServerSumNew {
 	}
 
 	private void flush() {
-		for(SelectionKey key : selectedKeys) {
+		for (SelectionKey key : selectedKeys) {
 			Object attachment = key.attachment();
 			if (attachment != null) {
 				try {
 					((Context) attachment).sc.close();
 				} catch (IOException e) {
-					//DO NOTHING
-				};
+					// DO NOTHING
+				}
+				;
 			}
 		}
 	}
@@ -278,15 +183,15 @@ public class ServerSumNew {
 	private void show() {
 		int nbClient = 0;
 		System.out.println("List of address : ");
-		for(SelectionKey key : selectedKeys) {
+		for (SelectionKey key : selectedKeys) {
 			Object attachment = key.attachment();
 			if (attachment != null) {
 				nbClient++;
 				System.out.println(((Context) attachment).getClientAdress());
 			}
 		}
-		System.out.println(nbClient+" clients connected");
-		
+		System.out.println(nbClient + " clients connected");
+
 	}
 
 	/***
