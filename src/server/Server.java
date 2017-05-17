@@ -1,5 +1,7 @@
 package server;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -8,11 +10,19 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Queue;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Server {
 
@@ -23,6 +33,10 @@ public class Server {
 	private static final long TIMEOUT = 2000;
 	private Queue<String> queue;
 
+	private int currentJobToCompute = 0;
+	private ArrayList<Job> jobs;
+	private ArrayList<Job> jobsWithPriority;
+
 	public Server(int port) throws IOException {
 		serverSocketChannel = ServerSocketChannel.open();
 		serverSocketChannel.bind(new InetSocketAddress(port));
@@ -32,6 +46,12 @@ public class Server {
 	}
 
 	public void launch() throws IOException {
+		loadJobsWithPriority(Paths.get("jobs.txt"));
+		System.out.println(jobs);
+		for (int i = 0; i < 10; i++) {
+			System.out.println(getNextTaskToCompute());
+		}
+
 		serverSocketChannel.configureBlocking(false);
 		serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 		Set<SelectionKey> selectedKeys = selector.selectedKeys();
@@ -273,4 +293,41 @@ public class Server {
 		return String.join(" and ", list);
 	}
 
+	private String getNextTaskToCompute() {
+		String taskJson = jobs.get(currentJobToCompute).getNewTask();
+		currentJobToCompute = (currentJobToCompute + 1) % jobs.size();
+		return taskJson;
+	}
+
+	private void loadJobsWithPriority(Path jobsFile)
+			throws JsonParseException, JsonMappingException, FileNotFoundException, IOException {
+		
+		loadJobs(jobsFile);
+		jobsWithPriority = new ArrayList<>();
+		
+		for(Job job : jobs) {
+			for (int i = 0; i < job.getPriority(); i++)
+				jobsWithPriority.add(job);
+		}
+	}
+	
+	private void loadJobs(Path jobsFile) throws IOException {
+		jobs = new ArrayList<>();
+
+		ObjectMapper mapper = new ObjectMapper();
+		mapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, false);
+
+		String lines = Files.lines(jobsFile).reduce("", (s1, s2) -> s1 + "\n" + s2);
+		String[] objectsDef = lines.split("}");
+
+		for (String objectDef : objectsDef) {
+			if (objectDef.length() == 1)
+				continue;
+
+			JobDefinition def = mapper.readValue(objectDef + "}", JobDefinition.class);
+			Job job = new Job(new File("results" + File.separator + def.JobId + ".txt"), def);
+			for (int i = 0; i < def.JobPriority; i++)
+				jobs.add(job);
+		}
+	}
 }
