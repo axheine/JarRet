@@ -1,21 +1,25 @@
 package client;
 
+import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
+import java.nio.charset.Charset;
+import java.util.HashMap;
 import java.util.Objects;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import http.HTTPClient;
 import http.HTTPResponse;
-import worker.Worker;
-import worker.WorkerFactory;
+import upem.jarret.worker.Worker;
+import upem.jarret.worker.WorkerFactory;
 
 public class Client {
 	private final InetSocketAddress serverAddress;
 	private final String clientID;
+	private HTTPClient httpclient = new HTTPClient();
 	
 	public Client (String serverAddress, int port, String clientID) {
 		Objects.requireNonNull(serverAddress);
@@ -55,8 +59,55 @@ public class Client {
 				System.err.println("Something went wrong while getting worker " + e);
 			}
 			
-			worker.compute(sto.getTask());
-			System.out.println("Computation Done.");
+			String answer = worker.compute(sto.getTask());
+			
+			ObjectMapper mapper = new ObjectMapper(); 
+		    TypeReference<HashMap<String,Object>> typeRef 
+		            = new TypeReference<HashMap<String,Object>>() {};
+
+		    HashMap<String, Object> o = null;
+			try {
+				o = mapper.readValue(answer, typeRef);
+			} catch (IOException e) {
+
+			} 
+			
+			//HashMap<String, Object> mapAnswer = new HashMap<String, Object>();
+			
+			
+			StringBuilder sb = new StringBuilder();
+			
+			sb	.append("{\n")
+				.append("\"JobId\": \"").append(sto.getJobID()).append("\",\n")
+				.append("\"WorkerVersion\": \"").append(sto.getWorkerVersion()).append("\",\n")
+				.append("\"WorkerURL\": \"").append(sto.getWorkerURL()).append("\",\n")
+				.append("\"WorkerClassName\": \"").append(sto.getWorkerClassName()).append("\",\n")
+				.append("\"Task\": \"").append(sto.getTask()).append("\",\n")
+				.append("\"ClientId\": \"").append(clientID).append("\",\n")
+				.append("\"Answer\": ").append(answer)
+				.append('}');
+			
+			
+			int bodyAnswerLength = Charset.forName("ASCII").encode(sb.toString()).capacity();
+			
+			StringBuilder sb2 = new StringBuilder("POST Answer HTTP/1.1\r\nHost: ");
+			sb2	.append(serverAddress)
+				.append("\r\nContent-Type: application/json\r\nContent-Length: ")
+				.append(bodyAnswerLength)
+				.append("\r\n\r\n")
+				.append(sb);
+			
+			
+			System.out.println("Answer to server : \n" + sb2.toString());
+			HTTPResponse r = null;
+			try {
+				r = this.httpclient.sendQuery(serverAddress, sb2.toString());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+			System.out.println("response : " + r.header);
 		}
 	}
 
@@ -67,7 +118,7 @@ public class Client {
 		String query = "GET Task HTTP/1.1\r\nHost:" + serverAddress + "\r\n\r\n";
 		System.out.println(query);
 		
-		HTTPResponse serverAnswer = httpclient.sendGetQuery(serverAddress, query);
+		HTTPResponse serverAnswer = httpclient.sendQuery(serverAddress, query);
 		
 		ServerTaskOrder sto = mapper.readValue(serverAnswer.body, ServerTaskOrder.class);
 		//System.out.println(sto);

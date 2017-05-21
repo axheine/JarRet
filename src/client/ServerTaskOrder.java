@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonView;
 
 public class ServerTaskOrder {
 	@JsonView()
-	private long JobId;
+	private int JobId;
 	
 	@JsonView()
 	private String WorkerVersion;
@@ -21,7 +21,7 @@ public class ServerTaskOrder {
 	@JsonView()
 	private long ComeBackInSeconds;
 
-	public long getJobID() {
+	public int getJobID() {
 		return JobId;
 	}
 
