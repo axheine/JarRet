@@ -96,7 +96,7 @@ public class Server {
 		SocketChannel sc = serverSocketChannel.accept();
 		sc.configureBlocking(false);
 		SelectionKey clientKey = sc.register(selector, SelectionKey.OP_READ);
-		clientKey.attach(new TaskContext(clientKey, BUFF_SIZE));
+		clientKey.attach(new TaskContext(clientKey, BUFF_SIZE, this));
 	}
 
 	static void silentlyClose(SelectableChannel sc) {
@@ -161,13 +161,11 @@ public class Server {
 					String line = sc.nextLine();
 					switch (line) {
 					case "HALT":
-
 					case "STOP":
 						queue.add(line);
 						selector.wakeup();
 						return;
 					case "FLUSH":
-
 					case "SHOW":
 						queue.add(line);
 						selector.wakeup();
@@ -195,7 +193,6 @@ public class Server {
 				} catch (IOException e) {
 					// DO NOTHING
 				}
-				;
 			}
 		}
 	}
@@ -292,13 +289,25 @@ public class Server {
 			list.add("WRITE");
 		return String.join(" and ", list);
 	}
-
-	private String getNextTaskToCompute() {
+	
+	/**
+	 * Return next task to compute
+	 * @return
+	 */
+	public String getNextTaskToCompute() {
 		String taskJson = jobs.get(currentJobToCompute).getNewTask();
 		currentJobToCompute = (currentJobToCompute + 1) % jobs.size();
 		return taskJson;
 	}
 
+	/**
+	 * Add priority to loaded jobs (put them multiple times in a list)
+	 * @param jobsFile
+	 * @throws JsonParseException
+	 * @throws JsonMappingException
+	 * @throws FileNotFoundException
+	 * @throws IOException
+	 */
 	private void loadJobsWithPriority(Path jobsFile)
 			throws JsonParseException, JsonMappingException, FileNotFoundException, IOException {
 		
@@ -311,6 +320,11 @@ public class Server {
 		}
 	}
 	
+	/**
+	 * Read job.json file to split jobs and store them in list
+	 * @param jobsFile
+	 * @throws IOException
+	 */
 	private void loadJobs(Path jobsFile) throws IOException {
 		jobs = new ArrayList<>();
 

@@ -62,4 +62,12 @@ abstract class Context {
 		}
 		return cl;
 	}
+	
+	public ByteBuffer getIn() {
+		return this.in;
+	}
+	
+	public ByteBuffer getOut() {
+		return this.out;
+	}
 }

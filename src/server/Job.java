@@ -38,8 +38,12 @@ public class Job {
 		this(outFile, def.WorkerURL, def.WorkerClassName, def.JobId, def.JobTaskNumber, def.JobPriority, def.WorkerVersionNumber);
 	}
 
+	/**
+	 * 
+	 * @param task
+	 * @param result
+	 */
 	public void acknowledgeTaskComputation(int task, String result) {
-
 		try {
 			outFile.write(result + "\n");
 			doneTasks.set(task);
@@ -49,6 +53,10 @@ public class Job {
 		}
 	}
 
+	/**
+	 * Return a JSON formatted task to ask to a client (called by getNextTaskToCompute server method)
+	 * @return
+	 */
 	public String getNewTask() {
 		if(isFinished()) throw new IllegalStateException("This job is finished");
 		
@@ -68,6 +76,10 @@ public class Job {
 		return sb.toString();
 	}
 	
+	/**
+	 * If a task has been asked and a problem occurs, re-set this task to me asked to the next client
+	 * @param task
+	 */
 	public void setTaskToReAsk(int task) {
 		if(doneTasks.get(task)) throw new IllegalStateException("This task has already been acknowledged, you can't cancel it");
 		askedTasks.set(task, false);
