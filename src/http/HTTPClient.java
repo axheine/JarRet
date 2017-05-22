@@ -2,6 +2,7 @@ package http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketOption;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
@@ -15,15 +16,18 @@ public class HTTPClient {
 	private SocketChannel sc;
 	private ByteBuffer buff;
 
-	public HTTPClient() {
+	public HTTPClient(InetSocketAddress address) throws IOException {
 		this.buff = ByteBuffer.allocate(BUFFER_SIZE);
+		this.sc = SocketChannel.open();
+		sc.connect(address);
 	}
 
 	public HTTPResponse sendQuery(InetSocketAddress address, String query) throws IOException {
 		buff.clear();
-		this.sc = SocketChannel.open();
-		sc.connect(address);
-		sc.write(ASCII_CHARSET.encode(query));
+		//sc = SocketChannel.open();
+		//sc.connect(address);
+		
+		System.out.println(sc.write(ASCII_CHARSET.encode(query)));
 
 		HTTPHeader header = readHeader();
 
@@ -63,7 +67,7 @@ public class HTTPClient {
 		boolean lastCR = false;
 
 		while (true) {
-			//System.out.println("Beginning of CRLF: "+buff);
+			System.out.println("Beginning of CRLF: "+buff);
 			buff.flip(); // read mode
 			
 			while (buff.hasRemaining()) {
@@ -72,14 +76,14 @@ public class HTTPClient {
 				if (o == '\n' && lastCR) {
 					buff.compact();
 					sb.setLength(sb.length() - 2);
-					//System.out.println("End of CRLF: "+buff);
+					System.out.println("End of CRLF: "+buff);
 					return sb.toString();
 				}
 				lastCR = (o == '\r');
 			}
 			buff.clear();
 			if (sc.read(buff) == -1) {
-				throw new HTTPException("Wrong Protocol");
+				throw new HTTPException("Wrong Protocol: SB content: "+sb.toString());
 			}
 		}
 	}
@@ -94,16 +98,16 @@ public class HTTPClient {
 		HashMap<String, String> properties = new HashMap<>();
 		String line = "";
 		String status = "";
-		//System.out.println("Buffer: "+buff);
+		System.out.println("Buffer: "+buff);
 		while ((line = readLineCRLF()).length() != 0) {
-			//System.out.println("Buffer: "+buff);
+			System.out.println("Buffer: "+buff);
 			
 			int splitterIndex = line.indexOf(':');
 			if (splitterIndex == -1) {
 				String[] tokens = line.split(" ");
 				status = tokens[0] + " " + tokens[1];
 			} else {
-				//System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
+				System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
 				properties.put(line.substring(0, splitterIndex), line.substring(splitterIndex + 2));
 			}
 		}
