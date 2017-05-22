@@ -49,7 +49,7 @@ abstract class Context {
     		Server.silentlyClose(sc);
     	}
     	
-    	key.interestOps(ops);
+    	key.interestOps(ops); //TODO: ça renvoie des exceptions
 	}
 
 	public String getClientAdress() {
