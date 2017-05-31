@@ -39,17 +39,21 @@ abstract class Context {
 	
 	private void updateInterestOps() {
     	int ops = 0;
+    	System.out.println("out : " + out);
+    	System.out.println("in :  " + in);
+    	System.out.println("in remaining : " + in.remaining());
+    	System.out.println("input : " + inputClosed);
 	    if(out.position() != 0) {
 	    	ops = ops | SelectionKey.OP_WRITE;
 	    }
-    	if(in.hasRemaining() && !inputClosed) {
+    	if(in.remaining() > 0 && !inputClosed) {
     		ops = ops | SelectionKey.OP_READ;
     	}
     	if(ops == 0) {
     		Server.silentlyClose(sc);
+    	}else {
+    		key.interestOps(ops); //TODO: ça renvoie des exceptions
     	}
-    	
-    	key.interestOps(ops); //TODO: ça renvoie des exceptions
 	}
 
 	public String getClientAdress() {

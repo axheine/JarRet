@@ -60,26 +60,15 @@ public class TaskContext extends Context {
 			receiveHeader();
 		}
 		if(currentReadState == ReadState.BODY) {
+			System.out.println("Read body");
 			receiveBody();
 		}
 		if(currentReadState == ReadState.FINISHED) {
 			System.out.println(sb.toString());
-			//TODO : process query and generate answer
+			String answer = generateAnswerForWait();
+			out.put(Charset.forName("UTF-8").encode(answer));
 		}
 		
-	}
-	
-	private void receiveBody() {
-		while(in.hasRemaining()) {
-			if(bodyLength <= 0) {
-				currentReadState = ReadState.FINISHED;
-				break;
-			}
-			
-			char c = in.getChar();
-			sb.append(c);
-			bodyLength --;
-		}
 	}
 
 	private void receiveHeader() {
@@ -90,34 +79,54 @@ public class TaskContext extends Context {
 				//System.out.println(c);
 				if(c == '\r') { //si on lit un \r on change d'état pour indiquer qu'on en à lu un
 					this.currentReadState = ReadState.HEADER_R;
+					continue;
 				}
 				if(c == '\n' && currentReadState == ReadState.HEADER_R) { // si on lit un \n et que le \r à été lu a l'étape d'avant
 					if(sb.length() == 0) { // si le sb est vide, on a lu un \r\n avant, c'est la fin du header
 						try {
+							System.out.println("create header");
 							httpheader = HTTPHeader.create(status, headerProperties);
 							bodyLength = httpheader.getContentLength();
-							this.currentReadState = ReadState.BODY;
+							this.currentReadState = ReadState.FINISHED;
+							return;
 						} catch (HTTPException e) {
 							
 						}
 					} else { // si il n'y a pas qu'un \r dans le sb, on le découpe pour créer la ligne
 						String line = sb.toString();
-						sb.delete(0, sb.length()); //TODO : si ça pète c'est là
+						sb.delete(0, sb.length());
 						int splitterIndex = line.indexOf(':');
 						System.out.println("Splitter value : " + splitterIndex);
 						if (splitterIndex == -1) { // si il n'y a pas de ";" la ligne est l'entete
 							String[] tokens = line.split(" ");
-							System.out.println(Arrays.toString(tokens));
 							status = tokens[0] + " " + tokens[1];
+							System.out.println(status);
 						} else { // sinon c'est une propriété
 							//System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
 							headerProperties.put(line.substring(0, splitterIndex), line.substring(splitterIndex + 2));
 						}
 					}
+					continue;
 				}
-				sb.append(c);
+				if(c!='\r') {
+					sb.append(c);
+				}
+				
 				System.out.println(sb.toString());
 			}
+		}
+	}
+	
+	private void receiveBody() {
+		System.out.println("enter create body");
+		while(in.hasRemaining()) {
+			if(bodyLength <= 0) {
+				currentReadState = ReadState.FINISHED;
+				break;
+			}
+			char c = in.getChar();
+			sb.append(c);
+			bodyLength --;
 		}
 	}
 
