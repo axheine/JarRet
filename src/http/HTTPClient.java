@@ -25,12 +25,12 @@ public class HTTPClient {
 		buff.clear();
 		//sc = SocketChannel.open();
 		//sc.connect(address);
-		
-		System.out.println("Written: "+sc.write(query)+" bytes");
+		int written = sc.write(query);
+		//System.out.println("Written: "+written+" bytes");
 
 		HTTPHeader header = readHeader();
 		
-		System.out.println("Finished reading header");
+		//System.out.println("Finished reading header");
 		
 		String body = null;
 
@@ -76,7 +76,7 @@ public class HTTPClient {
 		boolean lastCR = false;
 
 		while (true) {
-			System.out.println("Beginning of CRLF: "+buff);
+			//System.out.println("Beginning of CRLF: "+buff);
 			buff.flip(); // read mode
 			
 			while (buff.hasRemaining()) {
@@ -85,7 +85,7 @@ public class HTTPClient {
 				if (o == '\n' && lastCR) {
 					buff.compact();
 					sb.setLength(sb.length() - 2);
-					System.out.println("End of CRLF: "+buff);
+					//System.out.println("End of CRLF: "+buff);
 					return sb.toString();
 				}
 				lastCR = (o == '\r');
@@ -107,16 +107,16 @@ public class HTTPClient {
 		HashMap<String, String> properties = new HashMap<>();
 		String line = "";
 		String status = "";
-		System.out.println("Buffer: "+buff);
+		//System.out.println("Buffer: "+buff);
 		while ((line = readLineCRLF()).length() != 0) {
-			System.out.println("Buffer: "+buff);
+			//System.out.println("Buffer: "+buff);
 			
 			int splitterIndex = line.indexOf(':');
 			if (splitterIndex == -1) {
 				String[] tokens = line.split(" ");
 				status = tokens[0] + " " + tokens[1];
 			} else {
-				System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
+				//System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
 				properties.put(line.substring(0, splitterIndex), line.substring(splitterIndex + 2));
 			}
 		}

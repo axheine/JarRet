@@ -39,6 +39,7 @@ public class Client {
 			ServerTaskOrder sto = null;
 			Worker worker = null;
 			try {
+				System.out.println("Asking new task to server...");
 				sto = getTaskFromServer();
 			} catch (IOException e) {
 				System.err.println("Got error from server : " + e);
@@ -53,80 +54,76 @@ public class Client {
 				continue;
 			}
 
-			System.out.println("Get some Work at " + sto.getWorkerURL() + "/" + sto.getWorkerClassName());
-
-			try {
-				String key = sto.getWorkerURL() + "/" + sto.getWorkerVersion();
-				if (workers.containsKey(key)) {
-					worker = workers.get(key);
-				} else {
-					worker = WorkerFactory.getWorker(sto.getWorkerURL(), sto.getWorkerClassName());
-					workers.put(key, worker);
-				}
-				System.out.println("Found some work!");
-			} catch (MalformedURLException | ClassNotFoundException | IllegalAccessException | InstantiationException
-					| IllegalArgumentException | SecurityException e) {
-				System.err.println("Something went wrong while getting worker " + e);
-			}
+			System.out.println("Found some task! Getting worker...");
+			worker = getWorker(sto);
+			
+			
 			System.out.println("Computing answer...");
 			String answer = worker.compute(sto.getTask());
-
-			ObjectMapper mapper = new ObjectMapper();
-			TypeReference<HashMap<String, Object>> typeRef = new TypeReference<HashMap<String, Object>>() {
-			};
-
-			HashMap<String, Object> o = null;
-			try {
-				o = mapper.readValue(answer, typeRef);
-			} catch (IOException e) {
-
-			}
-
-			// HashMap<String, Object> mapAnswer = new HashMap<String,
-			// Object>();
-
-			StringBuilder contentBuilder = new StringBuilder();
-
-			contentBuilder.append("{\n").append("\"JobId\": \"").append(sto.getJobID()).append("\",\n")
-					.append("\"WorkerVersion\": \"").append(sto.getWorkerVersion()).append("\",\n")
-					.append("\"WorkerURL\": \"").append(sto.getWorkerURL()).append("\",\n")
-					.append("\"WorkerClassName\": \"").append(sto.getWorkerClassName()).append("\",\n")
-					.append("\"Task\": \"").append(sto.getTask()).append("\",\n").append("\"ClientId\": \"")
-					.append(clientID).append("\",\n").append("\"Answer\": ").append(answer).append("}");
-
-			ByteBuffer content = Charset.forName("UTF-8").encode(contentBuilder.toString());
-			int bodyAnswerLength = content.capacity()+Long.BYTES+Integer.BYTES;
 			
-			StringBuilder headerBuilder = new StringBuilder("POST Answer HTTP/1.1\r\nHost: ");
-			headerBuilder.append(serverAddress.getHostName())
-			   .append("\r\nContent-Type: application/json\r\nContent-Length: ")
-			   .append(bodyAnswerLength)
-			   .append("\r\n\r\n");
-			   //.append(Charset.forName("UTF-8").decode(content));
-			
-			ByteBuffer header = Charset.forName("UTF-8").encode(headerBuilder.toString());
-			queries.clear();
-			queries.put(header);
-			queries.putLong((long) sto.getJobID());
-			queries.putInt(sto.getTask());
-			queries.put(content);
-			queries.flip();
-			
-			header.flip();
-			content.flip();
-			System.out.println("Answer to server : \n" + Charset.forName("UTF-8").decode(header).toString()+sto.getJobID()+" "+sto.getTask()+Charset.forName("UTF-8").decode(content).toString());
-			System.out.println("Buffer: "+queries);
+			System.out.println("Building and sending answer packet to server...");
+			buildResponse(sto, answer);
 			
 			HTTPResponse r = null;
 			try {
 				r = httpclient.sendQuery(serverAddress, queries);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 
-			System.out.println("response : " + r.header);
+			System.out.println("Response : " + r.header);
 		}
+	}
+	
+	private Worker getWorker(ServerTaskOrder sto) {
+		try {
+			String key = sto.getWorkerURL() + "/" + sto.getWorkerVersion();
+			if (workers.containsKey(key)) {
+				System.out.println("Already have the worker, getting it...");
+				return workers.get(key);
+			} else {
+				System.out.println("Asking the worker to the server...");
+				System.out.println("Get some Work at " + sto.getWorkerURL() + "/" + sto.getWorkerClassName());
+				
+				Worker worker = WorkerFactory.getWorker(sto.getWorkerURL(), sto.getWorkerClassName());
+				workers.put(key, worker);
+				return worker;
+			}
+		} catch (MalformedURLException | ClassNotFoundException | IllegalAccessException | InstantiationException
+				| IllegalArgumentException | SecurityException e) {
+			System.err.println("Something went wrong while getting worker " + e);
+			return null;
+		}
+	}
+
+	private void buildResponse(ServerTaskOrder sto, String answer) {
+		StringBuilder contentBuilder = new StringBuilder();
+
+		contentBuilder.append("{\n").append("\"JobId\": \"").append(sto.getJobID()).append("\",\n")
+				.append("\"WorkerVersion\": \"").append(sto.getWorkerVersion()).append("\",\n")
+				.append("\"WorkerURL\": \"").append(sto.getWorkerURL()).append("\",\n")
+				.append("\"WorkerClassName\": \"").append(sto.getWorkerClassName()).append("\",\n")
+				.append("\"Task\": \"").append(sto.getTask()).append("\",\n").append("\"ClientId\": \"")
+				.append(clientID).append("\",\n").append("\"Answer\": ").append(answer).append("}");
+
+		ByteBuffer content = Charset.forName("ASCII").encode(contentBuilder.toString());
+		int bodyAnswerLength = content.capacity()+Long.BYTES+Integer.BYTES;
+		//System.out.println("Capacity: "+content.capacity()+" "+Long.BYTES+" "+Integer.BYTES);
+		
+		StringBuilder headerBuilder = new StringBuilder("POST Answer HTTP/1.1\r\nHost: ");
+		headerBuilder.append(serverAddress.getHostName())
+		   .append("\r\nContent-Type: application/json\r\nContent-Length: ")
+		   .append(bodyAnswerLength)
+		   .append("\r\n\r\n");
+		   //.append(Charset.forName("UTF-8").decode(content));
+		
+		ByteBuffer header = Charset.forName("ASCII").encode(headerBuilder.toString());
+		queries.clear();
+		queries.put(header);
+		queries.putLong((long) sto.getJobID());
+		queries.putInt(sto.getTask());
+		queries.put(content);
+		queries.flip();
 	}
 
 	private ServerTaskOrder getTaskFromServer() throws IOException {
