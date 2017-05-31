@@ -2,7 +2,6 @@ package http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketOption;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
@@ -10,7 +9,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 
 public class HTTPClient {
-	private final Charset ASCII_CHARSET = Charset.forName("ASCII");
+	public final Charset UTF8_CHARSET = Charset.forName("UTF-8");
 
 	private static final int BUFFER_SIZE = 4096;
 	private SocketChannel sc;
@@ -21,16 +20,18 @@ public class HTTPClient {
 		this.sc = SocketChannel.open();
 		sc.connect(address);
 	}
-
-	public HTTPResponse sendQuery(InetSocketAddress address, String query) throws IOException {
+	
+	public HTTPResponse sendQuery(InetSocketAddress address, ByteBuffer query) throws IOException {
 		buff.clear();
 		//sc = SocketChannel.open();
 		//sc.connect(address);
 		
-		System.out.println(sc.write(ASCII_CHARSET.encode(query)));
+		System.out.println("Written: "+sc.write(query)+" bytes");
 
 		HTTPHeader header = readHeader();
-
+		
+		System.out.println("Finished reading header");
+		
 		String body = null;
 
 		if (header.getContentLength() > 0) {
@@ -50,6 +51,14 @@ public class HTTPClient {
 		
 		//System.out.println("Body: \n"+body);
 		return new HTTPResponse(header, body);
+	}
+	
+	public HTTPResponse sendQuery(InetSocketAddress address, String query, Charset charset) throws IOException {
+		return sendQuery(address, charset.encode(query));
+	}
+	
+	public HTTPResponse sendQuery(InetSocketAddress address, String query) throws IOException {
+		return sendQuery(address, query, Charset.forName("UTF-8"));
 	}
 
 	/**
