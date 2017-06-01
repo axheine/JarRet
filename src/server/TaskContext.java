@@ -13,19 +13,22 @@ import http.HTTPHeader;
 public class TaskContext extends Context {
 	private final Server server;
 	private ReadState currentReadState;
-	private ByteBuffer in;
-	private ByteBuffer out;
+	//private ByteBuffer in;
+	//private ByteBuffer out;
 	private String status;
 	private StringBuilder sb;
 	private HashMap<String, String> headerProperties;
+	private String httpVersion;
 	private HTTPHeader httpheader;
 	private int bodyLength;
+	private ByteBuffer answer;
 	
 	
 	private enum ReadState {
 		HEADER,
-		HEADER_R,
 		BODY,
+		PROCESS_HEADER,
+		PROCESS_ANSWER,
 		FINISHED
 	}
 
@@ -53,81 +56,90 @@ public class TaskContext extends Context {
 		 * 			- on enregistre les infos dans le bon fichier --> acknowledgeTaskComputation();
 		 * 			- on renvoie la réponse
 		 */
-		in = super.getIn().flip();
-		
-		if(currentReadState == ReadState.HEADER || currentReadState == ReadState.HEADER_R) {
-			System.out.println("ReadHeader");
+		super.getIn().flip();
+		super.setIsRunningProcess(true);
+		if(currentReadState == ReadState.HEADER) {
+			System.out.println("Read Header");
 			receiveHeader();
 		}
 		if(currentReadState == ReadState.BODY) {
 			System.out.println("Read body");
 			receiveBody();
 		}
-		if(currentReadState == ReadState.FINISHED) {
-			System.out.println(sb.toString());
-			String answer = generateAnswerForWait();
-			out.put(Charset.forName("UTF-8").encode(answer));
+		if(currentReadState == ReadState.PROCESS_HEADER) {
+			processHeader();
 		}
-		
+		if(currentReadState == ReadState.PROCESS_ANSWER) {
+			processAnswer();
+		}
+		if(currentReadState == ReadState.FINISHED) {
+			super.setIsRunningProcess(false);
+		}
 	}
 
 	private void receiveHeader() {
-		while (in.remaining() >= Character.BYTES) {
-			CharBuffer cb = Charset.forName("ASCII").decode(in);
-			for (int i = 0; i < cb.length(); i++) {
-				char c = cb.charAt(i);
-				//System.out.println(c);
-				if(c == '\r') { //si on lit un \r on change d'état pour indiquer qu'on en à lu un
-					this.currentReadState = ReadState.HEADER_R;
-					continue;
-				}
-				if(c == '\n' && currentReadState == ReadState.HEADER_R) { // si on lit un \n et que le \r à été lu a l'étape d'avant
-					if(sb.length() == 0) { // si le sb est vide, on a lu un \r\n avant, c'est la fin du header
-						try {
-							System.out.println("create header");
-							httpheader = HTTPHeader.create(status, headerProperties);
-							bodyLength = httpheader.getContentLength();
-							this.currentReadState = ReadState.FINISHED;
-							return;
-						} catch (HTTPException e) {
-							
-						}
-					} else { // si il n'y a pas qu'un \r dans le sb, on le découpe pour créer la ligne
-						String line = sb.toString();
-						sb.delete(0, sb.length());
-						int splitterIndex = line.indexOf(':');
-						System.out.println("Splitter value : " + splitterIndex);
-						if (splitterIndex == -1) { // si il n'y a pas de ";" la ligne est l'entete
-							String[] tokens = line.split(" ");
-							status = tokens[0] + " " + tokens[1];
-							System.out.println(status);
-						} else { // sinon c'est une propriété
-							//System.out.println("Header line: "+line.substring(0, splitterIndex) +" / "+ line.substring(splitterIndex + 2));
-							headerProperties.put(line.substring(0, splitterIndex), line.substring(splitterIndex + 2));
-						}
-					}
-					continue;
-				}
-				if(c!='\r') {
-					sb.append(c);
-				}
-				
-				System.out.println(sb.toString());
+		while (super.getIn().remaining() >= Character.BYTES) {
+			CharBuffer cb = Charset.forName("ASCII").decode(super.getIn());
+			sb.append(cb);
+			
+			if(sb.indexOf("\r\n\r\n") != -1) {
+				System.out.println("All bytes received for header");
+				this.currentReadState = ReadState.BODY;
+				processHeader();
 			}
 		}
 	}
 	
+	private void processHeader() {
+		for (String line: sb.toString().split("\r\n")) {
+			System.out.println("Line : " + line);
+			int splitterIndex = line.indexOf(':');
+			if (splitterIndex == -1) {
+				status = line;
+				System.out.println("Status : " + status);
+			} else {
+				headerProperties.put(line.substring(0, splitterIndex), line.substring(splitterIndex + 2));
+			}
+		}
+		try {
+			httpheader = HTTPHeader.create("HTTP/1.1 200 OK", headerProperties);
+		} catch (HTTPException e) {
+			System.err.println("Error while creating HTTPHeader object");
+			e.printStackTrace();
+		}
+	}
+
 	private void receiveBody() {
-		System.out.println("enter create body");
-		while(in.hasRemaining()) {
+		System.out.println("Enter create body");
+		while(super.getIn().hasRemaining()) {
 			if(bodyLength <= 0) {
-				currentReadState = ReadState.FINISHED;
+				currentReadState = ReadState.PROCESS_ANSWER;
 				break;
 			}
-			char c = in.getChar();
+			
+			char c = super.getIn().getChar();
 			sb.append(c);
 			bodyLength --;
 		}
+	}
+	
+	private void processAnswer() {
+		System.out.println("Start processing answer");
+		
+		if(status.startsWith("GET Task")) {
+			if(server.hasTaskToCompute()) {
+				answer = Charset.forName("UTF-8").encode(generateAnswerForTask());
+			} else {
+				answer = Charset.forName("UTF-8").encode(generateAnswerForWait());
+			}
+		}
+		
+		if(status.startsWith("POST Answer")) {
+			//TODO : save in jobs result file (thinks to read long and int)
+			System.out.println("POST RECEIVED : ");
+			answer = Charset.forName("UTF-8").encode(generateOKAnswer());
+		}
+		super.getOut().put(answer);
 	}
 
 	/**
@@ -139,7 +151,7 @@ public class TaskContext extends Context {
 		String task = server.getNextTaskToCompute();
 		int bodyLength = Charset.forName("UTF-8").encode(task).limit();
 		
-		sb	.append("HTTP/1.1 200 OK\r\nContent-type: application/json; charset=utf-8\r\nContent-length: ")
+		sb	.append("HTTP/1.1 200 OK\r\nContent-type: application/json; charset=utf-8\r\nContent-Length: ")
 			.append(bodyLength)
 			.append("\r\n\r\n")
 			.append(task);
@@ -155,7 +167,7 @@ public class TaskContext extends Context {
 		
 		int bodyLength = Charset.forName("UTF-8").encode(sbbody.toString()).limit();
 		
-		sb	.append("HTTP/1.1 200 OK\r\nContent-type: application/json; charset=utf-8\r\nContent-length: ")
+		sb	.append("HTTP/1.1 200 OK\r\nContent-type: application/json; charset=utf-8\r\nContent-Length: ")
 			.append(bodyLength)
 			.append("\r\n\r\n")
 			.append(sbbody);

@@ -7,6 +7,7 @@ import java.nio.channels.SocketChannel;
 
 abstract class Context {
 	private boolean inputClosed = false;
+	private boolean isRunningProcess = false;
 	private final ByteBuffer in;
 	private final ByteBuffer out;
 	private final SelectionKey key;
@@ -43,6 +44,9 @@ abstract class Context {
     	System.out.println("in :  " + in);
     	System.out.println("in remaining : " + in.remaining());
     	System.out.println("input : " + inputClosed);
+    	if(isRunningProcess) {
+    		ops = ops | SelectionKey.OP_WRITE;
+    	}
 	    if(out.position() != 0) {
 	    	ops = ops | SelectionKey.OP_WRITE;
 	    }
@@ -50,6 +54,7 @@ abstract class Context {
     		ops = ops | SelectionKey.OP_READ;
     	}
     	if(ops == 0) {
+    		System.out.println("CLOSE CLIENT");
     		Server.silentlyClose(sc);
     	}else {
     		key.interestOps(ops); //TODO: ça renvoie des exceptions
@@ -73,5 +78,9 @@ abstract class Context {
 	
 	public ByteBuffer getOut() {
 		return this.out;
+	}
+	
+	public void setIsRunningProcess(boolean state) {
+		this.isRunningProcess = state;
 	}
 }

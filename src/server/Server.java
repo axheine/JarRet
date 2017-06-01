@@ -26,7 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Server {
 
-	static final int BUFF_SIZE = 512;
+	static final int BUFF_SIZE = 4096;
 	private final ServerSocketChannel serverSocketChannel;
 	private final Selector selector;
 	private final Set<SelectionKey> selectedKeys;
@@ -315,8 +315,9 @@ public class Server {
 		jobsWithPriority = new ArrayList<>();
 		
 		for(Job job : jobs) {
-			for (int i = 0; i < job.getPriority(); i++)
+			for (int i = 0; i < job.getPriority(); i++) {
 				jobsWithPriority.add(job);
+			}
 		}
 	}
 	
@@ -343,5 +344,14 @@ public class Server {
 			for (int i = 0; i < def.JobPriority; i++)
 				jobs.add(job);
 		}
+	}
+
+	
+	/**
+	 * Return true if server has a task to compute. Use it before getNextTaskToCompute() to avoid null answer.
+	 * @return
+	 */
+	public boolean hasTaskToCompute() {
+		return jobs.size() != 0;
 	}
 }
